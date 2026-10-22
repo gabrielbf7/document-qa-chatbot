@@ -28,3 +28,13 @@ uploads/          user uploads (git-ignored)
 - Use only fictional documents.
 - Keep to the MVP scope.
 - Explain in Portuguese before running any command.
+
+## Architecture
+
+- `src/config.py`: all constants (paths, model, chunk size/overlap, TOP_K).
+- `src/loaders.py`: MD/TXT as one document, PDFs page by page (page number kept). The repeated PDF header (clinic address/phone line and "Page N") is stripped by regex.
+- `src/chunker.py`: split by paragraph, merge up to 800 chars, ~150 chars of overlap, oversized paragraphs split by sentence. The latest Markdown heading is stored as `section`.
+- `src/indexer.py`: embeddings with `intfloat/multilingual-e5-small` (multilingual, small, runs locally on CPU). Passages use the `passage: ` prefix and queries use `query: `. Vectors are normalized, so cosine similarity is a plain dot product (numpy, no vector DB).
+- Index files in `index/` (git-ignored): `embeddings.npy`, `chunks.json` (chunk_id like `faq.md#2`, source, page, section, chunk_index, text) and `manifest.json` (model, chunk settings, created_at, sha256 per file).
+- CLI: `python -m src.indexer build` and `python -m src.indexer search "question"`.
+- Known limit: e5-small scores are compressed (about 0.77-0.84), so a fixed score threshold is unreliable for detecting "no answer". Let the LLM decide from the retrieved context.
