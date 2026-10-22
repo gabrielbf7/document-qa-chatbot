@@ -43,5 +43,8 @@ uploads/          user uploads (git-ignored)
 - Cost: `cost_usd` comes from `response.usage` and the prices in `config.py` (USD per million tokens).
 - The API key is loaded from `.env` with python-dotenv; `qa.py` fails with a clear message if it is missing.
 - CLI: `python -m src.qa ask "question"` and `python -m src.qa eval` (10 EN/PT questions, real API calls, about $0.002 total).
+- `app.py` (Streamlit UI, run with `streamlit run app.py`): chat with `st.chat_input`/`st.chat_message`, history in `st.session_state`. Each answer shows sources as "file — section — p. N" (missing parts omitted), its cost, and the session total in the sidebar. `answered=false` shows the model's "don't know / contact the front desk" reply with no sources.
+- UI caching: `st.cache_resource` for the embedding model, the Anthropic client and the loaded index (`answer(..., index=...)` and `search(..., index=...)` take the cached index). The Reindex button rebuilds from `knowledge_base/` + `uploads/` and clears only the index cache. If `index/` is missing, the app shows a warning and a "Build index" button.
+- `src/uploads.py`: uploads are saved to `uploads/` with a sanitized base name (only .pdf/.txt/.md, unsafe characters replaced); a name that already exists in `knowledge_base/` gets an `upload_` prefix so sources stay unique. Uploaded files only enter searches after Reindex.
 - Tests: `python -m pytest` (no API calls; covers prompt building, cost, JSON parsing).
 - Known limit: e5-small scores are compressed (about 0.77-0.84), so a fixed score threshold is unreliable for detecting "no answer". Let the LLM decide from the retrieved context.

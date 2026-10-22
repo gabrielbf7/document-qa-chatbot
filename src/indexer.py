@@ -14,8 +14,9 @@ from src.config import (
     KNOWLEDGE_DIR,
     ROOT_DIR,
     TOP_K,
+    UPLOADS_DIR,
 )
-from src.loaders import SUPPORTED_EXTENSIONS, load_documents
+from src.loaders import SUPPORTED_EXTENSIONS, load_file
 
 _model = None
 
@@ -43,12 +44,33 @@ def sha256_of(path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def source_files() -> list:
+    """Supported files in knowledge_base/ and uploads/ (uploads may not exist yet)."""
+    files = []
+    for directory in (ROOT_DIR / KNOWLEDGE_DIR, ROOT_DIR / UPLOADS_DIR):
+        if directory.is_dir():
+            files.extend(
+                path
+                for path in sorted(directory.iterdir())
+                if path.suffix.lower() in SUPPORTED_EXTENSIONS
+            )
+    return files
+
+
+def index_exists() -> bool:
+    index_dir = ROOT_DIR / INDEX_DIR
+    return all(
+        (index_dir / name).is_file()
+        for name in ("embeddings.npy", "chunks.json", "manifest.json")
+    )
+
+
 def build_index() -> list[dict]:
-    knowledge_dir = ROOT_DIR / KNOWLEDGE_DIR
     index_dir = ROOT_DIR / INDEX_DIR
     index_dir.mkdir(exist_ok=True)
 
-    chunks = chunk_documents(load_documents(knowledge_dir))
+    files = source_files()
+    chunks = chunk_documents([doc for path in files for doc in load_file(path)])
     embeddings = embed([chunk["text"] for chunk in chunks], "passage: ")
 
     np.save(index_dir / "embeddings.npy", embeddings)
@@ -60,11 +82,7 @@ def build_index() -> list[dict]:
         "chunk_size": CHUNK_SIZE,
         "chunk_overlap": CHUNK_OVERLAP,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "files": {
-            path.name: sha256_of(path)
-            for path in sorted(knowledge_dir.iterdir())
-            if path.suffix.lower() in SUPPORTED_EXTENSIONS
-        },
+        "files": {path.name: sha256_of(path) for path in files},
     }
     (index_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
@@ -79,8 +97,9 @@ def load_index() -> tuple[np.ndarray, list[dict]]:
     return embeddings, chunks
 
 
-def search(query: str, top_k: int = TOP_K) -> list[dict]:
-    embeddings, chunks = load_index()
+def search(query: str, top_k: int = TOP_K, index=None) -> list[dict]:
+    """index: optional (embeddings, chunks) already loaded, to avoid reading from disk."""
+    embeddings, chunks = index if index is not None else load_index()
     query_vector = embed([query], "query: ")[0]
     scores = embeddings @ query_vector  # vectors are normalized, so dot product = cosine
     best = np.argsort(scores)[::-1][:top_k]

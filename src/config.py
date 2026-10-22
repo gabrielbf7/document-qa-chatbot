@@ -4,6 +4,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 KNOWLEDGE_DIR = "knowledge_base"
 INDEX_DIR = "index"
+UPLOADS_DIR = "uploads"
 
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 

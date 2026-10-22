@@ -116,11 +116,11 @@ def parse_response(text: str, chunks: list[dict]) -> dict:
     return {"answered": True, "answer": data["answer"], "sources": sources}
 
 
-def answer(question: str, client=None) -> dict:
+def answer(question: str, client=None, index=None) -> dict:
     from src.indexer import search
 
     client = client or get_client()
-    chunks = search(question, TOP_K)
+    chunks = search(question, TOP_K, index=index)
     response = client.messages.create(
         model=LLM_MODEL,
         max_tokens=MAX_OUTPUT_TOKENS,
