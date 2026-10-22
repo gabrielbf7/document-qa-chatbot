@@ -37,4 +37,11 @@ uploads/          user uploads (git-ignored)
 - `src/indexer.py`: embeddings with `intfloat/multilingual-e5-small` (multilingual, small, runs locally on CPU). Passages use the `passage: ` prefix and queries use `query: `. Vectors are normalized, so cosine similarity is a plain dot product (numpy, no vector DB).
 - Index files in `index/` (git-ignored): `embeddings.npy`, `chunks.json` (chunk_id like `faq.md#2`, source, page, section, chunk_index, text) and `manifest.json` (model, chunk settings, created_at, sha256 per file).
 - CLI: `python -m src.indexer build` and `python -m src.indexer search "question"`.
+- `src/qa.py`: `answer(question)` runs the search (TOP_K=4), sends the chunks as `<document id source section page>` tags with the question last, and asks Claude (`claude-haiku-5-5`, `output_config.effort="low"`, max 1024 output tokens) for JSON only: `{"answered", "answer", "sources": [chunk_id]}`. Code, not the model, maps chunk ids to source/section/page.
+- Answer rules (system prompt): use only the documents, reply in the question's language, say "don't know" and point to the front desk when the answer is missing, never give medication doses or outside knowledge.
+- Guardrails in code: chunk ids not retrieved are dropped; malformed JSON, or an "answered" reply citing no valid chunk, becomes `answered=false` with a fallback message; `answered=false` always has no sources.
+- Cost: `cost_usd` comes from `response.usage` and the prices in `config.py` (USD per million tokens).
+- The API key is loaded from `.env` with python-dotenv; `qa.py` fails with a clear message if it is missing.
+- CLI: `python -m src.qa ask "question"` and `python -m src.qa eval` (10 EN/PT questions, real API calls, about $0.002 total).
+- Tests: `python -m pytest` (no API calls; covers prompt building, cost, JSON parsing).
 - Known limit: e5-small scores are compressed (about 0.77-0.84), so a fixed score threshold is unreliable for detecting "no answer". Let the LLM decide from the retrieved context.

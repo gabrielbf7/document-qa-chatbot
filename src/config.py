@@ -11,3 +11,11 @@ CHUNK_SIZE = 800  # characters
 CHUNK_OVERLAP = 150  # characters
 
 TOP_K = 4
+
+LLM_MODEL = "claude-haiku-5-5"
+LLM_EFFORT = "low"
+MAX_OUTPUT_TOKENS = 1024
+
+# USD per million tokens
+PRICE_INPUT_PER_MTOK = 0.10
+PRICE_OUTPUT_PER_MTOK = 0.50

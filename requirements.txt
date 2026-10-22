@@ -1,3 +1,6 @@
 sentence-transformers==6.2.0
 pypdf==6.21.2
 numpy==2.5.4
+anthropic==2.1.0
+python-dotenv==1.2.4
+pytest==9.1.1
