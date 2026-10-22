@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+.env
+index/
+uploads/
+.pytest_cache/
+.DS_Store
+Thumbs.db
