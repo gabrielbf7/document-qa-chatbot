@@ -1,8 +1,11 @@
 import re
+from pathlib import Path
 
 from src.config import CHUNK_OVERLAP, CHUNK_SIZE
 
 HEADING = re.compile(r"^#{1,6}\s+(.*\S)\s*$")
+MD_HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+TXT_HEADING_MAX_LEN = 60
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -92,22 +95,104 @@ def chunk_text(text: str) -> list[dict]:
     return chunks
 
 
+def is_caps_heading(line: str) -> bool:
+    """TXT heading: a short line with letters and no lowercase, e.g. "OPENING HOURS" or "1. GREETING"."""
+    stripped = line.strip()
+    return (
+        0 < len(stripped) <= TXT_HEADING_MAX_LEN
+        and any(char.isalpha() for char in stripped)
+        and stripped == stripped.upper()
+        and not stripped.startswith("-")
+    )
+
+
+def split_sections(text: str, markdown: bool) -> list[dict]:
+    """Split text at headings into sections: {"titles", "levels", "text"}.
+
+    titles/levels is the heading path (parents first). Sections whose body is empty
+    (a heading directly followed by a sub-heading) are dropped; their title still
+    appears in the path of their children.
+    """
+    sections, stack, current, seen_text = [], [], None, False
+    for line in text.splitlines():
+        level = title = None
+        if markdown:
+            match = MD_HEADING.match(line)
+            if match:
+                level, title = len(match.group(1)), match.group(2)
+        elif is_caps_heading(line):
+            level, title = (2 if seen_text else 1), line.strip().title()
+        seen_text = seen_text or bool(line.strip())
+
+        if level:
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            stack.append((level, title))
+            current = {
+                "levels": [lvl for lvl, _ in stack],
+                "titles": [ttl for _, ttl in stack],
+                "lines": [line],
+                "body": 0,
+            }
+            sections.append(current)
+        else:
+            if current is None:
+                current = {"levels": [], "titles": [], "lines": [], "body": 0}
+                sections.append(current)
+            current["lines"].append(line)
+            current["body"] += bool(line.strip())
+
+    return [
+        {"titles": s["titles"], "levels": s["levels"], "text": "\n".join(s["lines"]).strip()}
+        for s in sections
+        if s["body"]
+    ]
+
+
+def humanize(source: str) -> str:
+    return Path(source).stem.replace("_", " ").title()
+
+
 def chunk_documents(documents: list[dict]) -> list[dict]:
-    """Chunk loaded documents; adds chunk_id, chunk_index, source, page, section."""
+    """Chunk loaded documents.
+
+    MD/TXT are split at headings first, then each section goes through chunk_text, so
+    overlap never crosses a section boundary. Each chunk gets chunk_id, chunk_index,
+    source, page, section (innermost heading) and header ("<doc title> > <section path>",
+    or "<doc title> > p. N" for PDFs), which is prepended to the text before embedding.
+    """
     chunks, counters = [], {}
     for doc in documents:
-        for chunk in chunk_text(doc["text"]):
-            source = doc["source"]
-            index = counters.get(source, 0)
-            counters[source] = index + 1
-            chunks.append(
-                {
-                    "chunk_id": f"{source}#{index}",
-                    "source": source,
-                    "page": doc["page"],
-                    "section": chunk["section"],
-                    "chunk_index": index,
-                    "text": chunk["text"],
-                }
-            )
+        source, page = doc["source"], doc["page"]
+        suffix = Path(source).suffix.lower()
+        if suffix in (".md", ".txt"):
+            sections = split_sections(doc["text"], markdown=suffix == ".md")
+        else:
+            sections = [{"titles": [], "levels": [], "text": doc["text"]}]
+
+        # Document title: the level-1 heading if there is one, else the file name.
+        title = next((s["titles"][0] for s in sections if s["levels"][:1] == [1]), humanize(source))
+
+        for section in sections:
+            titles = section["titles"]
+            path = titles[1:] if section["levels"][:1] == [1] else titles
+            if page is not None:
+                header = f"{title} > p. {page}"
+            else:
+                header = " > ".join([title, *path])
+
+            for chunk in chunk_text(section["text"]):
+                index = counters.get(source, 0)
+                counters[source] = index + 1
+                chunks.append(
+                    {
+                        "chunk_id": f"{source}#{index}",
+                        "source": source,
+                        "page": page,
+                        "section": titles[-1] if titles else None,
+                        "chunk_index": index,
+                        "header": header,
+                        "text": chunk["text"],
+                    }
+                )
     return chunks

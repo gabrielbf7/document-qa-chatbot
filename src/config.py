@@ -11,7 +11,7 @@ EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 CHUNK_SIZE = 800  # characters
 CHUNK_OVERLAP = 150  # characters
 
-TOP_K = 4
+TOP_K = 8
 
 LLM_MODEL = "claude-haiku-5-5"
 LLM_EFFORT = "low"

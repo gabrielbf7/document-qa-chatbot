@@ -71,7 +71,8 @@ def build_index() -> list[dict]:
 
     files = source_files()
     chunks = chunk_documents([doc for path in files for doc in load_file(path)])
-    embeddings = embed([chunk["text"] for chunk in chunks], "passage: ")
+    # The header ("<doc title> > <section path>") is embedded with the text, not shown to the LLM.
+    embeddings = embed([f"{chunk['header']}\n{chunk['text']}" for chunk in chunks], "passage: ")
 
     np.save(index_dir / "embeddings.npy", embeddings)
     (index_dir / "chunks.json").write_text(
